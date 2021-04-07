@@ -16,6 +16,10 @@ limitations under the License.
 
 package workqueue
 
+import
+("k8s.io/klog"
+"github.com/sirupsen/logrus")
+
 // RateLimitingInterface is an interface that rate limits items being added to the queue.
 type RateLimitingInterface interface {
 	DelayingInterface
@@ -57,7 +61,10 @@ type rateLimitingType struct {
 
 // AddRateLimited AddAfter's the item based on the time when the rate limiter says it's ok
 func (q *rateLimitingType) AddRateLimited(item interface{}) {
-	q.DelayingInterface.AddAfter(item, q.rateLimiter.When(item))
+	logrus.Info("ENTEREDDDDDDDDDDDDD")
+	t := q.rateLimiter.When(item)
+	klog.Warnf("Adding item After %#v %v", item, t)
+	q.DelayingInterface.AddAfter(item, t)
 }
 
 func (q *rateLimitingType) NumRequeues(item interface{}) int {
