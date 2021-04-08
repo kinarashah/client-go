@@ -17,7 +17,9 @@ limitations under the License.
 package workqueue
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +34,8 @@ type RateLimiter interface {
 	Forget(item interface{})
 	// NumRequeues returns back how many failures the item has had
 	NumRequeues(item interface{}) int
+
+	ToLog(item interface{}) bool
 }
 
 // DefaultControllerRateLimiter is a no-arg constructor for a default rate limiter for a workqueue.  It has
@@ -52,7 +56,11 @@ type BucketRateLimiter struct {
 var _ RateLimiter = &BucketRateLimiter{}
 
 func (r *BucketRateLimiter) When(item interface{}) time.Duration {
-	return r.Limiter.Reserve().Delay()
+	d := r.Limiter.Reserve().Delay()
+	if r.ToLog(item) {
+		fmt.Println(fmt.Sprintf("BucketRateLimiter item %v %v", item, d))
+	}
+	return d
 }
 
 func (r *BucketRateLimiter) NumRequeues(item interface{}) int {
@@ -60,6 +68,14 @@ func (r *BucketRateLimiter) NumRequeues(item interface{}) int {
 }
 
 func (r *BucketRateLimiter) Forget(item interface{}) {
+}
+
+func (r *BucketRateLimiter) ToLog(item interface{}) bool {
+	c := fmt.Sprintf("%v", item)
+	if strings.HasPrefix(c, "c-") {
+		return true
+	}
+	return false
 }
 
 // ItemExponentialFailureRateLimiter does a simple baseDelay*2^<num-failures> limit
@@ -86,6 +102,14 @@ func DefaultItemBasedRateLimiter() RateLimiter {
 	return NewItemExponentialFailureRateLimiter(time.Millisecond, 1000*time.Second)
 }
 
+func (r *ItemExponentialFailureRateLimiter) ToLog(item interface{}) bool {
+	c := fmt.Sprintf("%v", item)
+	if strings.HasPrefix(c, "c-") {
+		return true
+	}
+	return false
+}
+
 func (r *ItemExponentialFailureRateLimiter) When(item interface{}) time.Duration {
 	r.failuresLock.Lock()
 	defer r.failuresLock.Unlock()
@@ -93,15 +117,27 @@ func (r *ItemExponentialFailureRateLimiter) When(item interface{}) time.Duration
 	exp := r.failures[item]
 	r.failures[item] = r.failures[item] + 1
 
+	toLog := r.ToLog(item)
+
 	// The backoff is capped such that 'calculated' value never overflows.
 	backoff := float64(r.baseDelay.Nanoseconds()) * math.Pow(2, float64(exp))
 	if backoff > math.MaxInt64 {
+		if toLog {
+			fmt.Println(fmt.Sprintf("ItemFailureRateLimiter item maxDelay %v %v failure %v", item, r.maxDelay, r.failures[item]))
+		}
 		return r.maxDelay
 	}
 
 	calculated := time.Duration(backoff)
 	if calculated > r.maxDelay {
+		if toLog {
+			fmt.Println(fmt.Sprintf("ItemFailureRateLimiter item maxDelay %v %v failure %v", item, r.maxDelay, r.failures[item]))
+		}
 		return r.maxDelay
+	}
+
+	if toLog {
+		fmt.Println(fmt.Sprintf("ItemFailureRateLimiter item final %v %v failures %v", item, calculated, r.failures[item]))
 	}
 
 	return calculated
@@ -140,6 +176,10 @@ func NewItemFastSlowRateLimiter(fastDelay, slowDelay time.Duration, maxFastAttem
 		slowDelay:       slowDelay,
 		maxFastAttempts: maxFastAttempts,
 	}
+}
+
+func (r *ItemFastSlowRateLimiter) ToLog(item interface{}) bool {
+	return false
 }
 
 func (r *ItemFastSlowRateLimiter) When(item interface{}) time.Duration {
@@ -190,6 +230,10 @@ func (r *MaxOfRateLimiter) When(item interface{}) time.Duration {
 
 func NewMaxOfRateLimiter(limiters ...RateLimiter) RateLimiter {
 	return &MaxOfRateLimiter{limiters: limiters}
+}
+
+func (r *MaxOfRateLimiter) ToLog(item interface{}) bool {
+	return false
 }
 
 func (r *MaxOfRateLimiter) NumRequeues(item interface{}) int {
