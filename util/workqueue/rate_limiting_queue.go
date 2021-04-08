@@ -16,6 +16,11 @@ limitations under the License.
 
 package workqueue
 
+import (
+	"fmt"
+	"strings"
+)
+
 // RateLimitingInterface is an interface that rate limits items being added to the queue.
 type RateLimitingInterface interface {
 	DelayingInterface
@@ -57,7 +62,12 @@ type rateLimitingType struct {
 
 // AddRateLimited AddAfter's the item based on the time when the rate limiter says it's ok
 func (q *rateLimitingType) AddRateLimited(item interface{}) {
-	q.DelayingInterface.AddAfter(item, q.rateLimiter.When(item))
+	name := fmt.Sprintf("%v", item)
+	t := q.rateLimiter.When(item)
+	if strings.HasPrefix(name, "c-") {
+		fmt.Printf("AddRateLimited item %v time %v \n", name, t)
+	}
+	q.DelayingInterface.AddAfter(item, t)
 }
 
 func (q *rateLimitingType) NumRequeues(item interface{}) int {
