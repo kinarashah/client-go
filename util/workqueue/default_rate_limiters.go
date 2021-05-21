@@ -179,6 +179,10 @@ func NewItemFastSlowRateLimiter(fastDelay, slowDelay time.Duration, maxFastAttem
 }
 
 func (r *ItemFastSlowRateLimiter) ToLog(item interface{}) bool {
+	c := fmt.Sprintf("%v", item)
+	if strings.HasPrefix(c, "c-") {
+		return true
+	}
 	return false
 }
 
@@ -188,8 +192,16 @@ func (r *ItemFastSlowRateLimiter) When(item interface{}) time.Duration {
 
 	r.failures[item] = r.failures[item] + 1
 
+	toLog := r.ToLog(item)
 	if r.failures[item] <= r.maxFastAttempts {
+		if toLog {
+			fmt.Println(fmt.Sprintf("ItemFastSlowRateLimiter item fastDelay %v %v failure %v", item, r.fastDelay, r.failures[item]))
+		}
 		return r.fastDelay
+	}
+
+	if toLog {
+		fmt.Println(fmt.Sprintf("ItemFastSlowRateLimiter item slowDelay %v %v failure %v", item, r.fastDelay, r.failures[item]))
 	}
 
 	return r.slowDelay
