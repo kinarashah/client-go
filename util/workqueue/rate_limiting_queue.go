@@ -64,7 +64,7 @@ type rateLimitingType struct {
 func (q *rateLimitingType) AddRateLimited(item interface{}) {
 	name := fmt.Sprintf("%v", item)
 	t := q.rateLimiter.When(item)
-	if strings.HasPrefix(name, "c-") {
+	if strings.HasPrefix(name, "c-") && !strings.Contains(name, "/"){
 		fmt.Printf("AddRateLimited item %v time %v \n", name, t)
 	}
 	q.DelayingInterface.AddAfter(item, t)
